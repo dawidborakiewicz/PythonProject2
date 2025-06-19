@@ -1,6 +1,13 @@
+"""
+Entry point and high-level orchestration for the rain-with-collision demo.
+Initializes window & OpenGL, loads shaders, textures, scene and skybox,
+builds or loads a terrain height map for collision detection,
+and runs the main loop to handle input, update simulation, render,
+and clean up on exit.
+"""
 import pygame
 from pygame.locals import DOUBLEBUF, OPENGL, K_ESCAPE, K_TAB, K_r, K_h, K_f, K_l
-from glm import perspective, radians, rotate, mat4, vec3
+from pyglm.glm import perspective, radians, rotate, mat4, vec3
 from context import init_context
 from shaders import create_shader
 from textures import load_atlas
@@ -18,19 +25,39 @@ from OpenGL.GL import *
 from skybox_renderer import SkyboxRenderer
 import os
 
+"""
+   Application entry point.
 
+   Workflow:
+     1. Initialize Pygame window and OpenGL context
+     2. Compile shaders and load textures
+     3. Create particle system and renderers (rain + skybox)
+     4. Load or build 3D scene (GLTF) and apply lighting
+     5. Construct or load HeightMap for terrain collisions
+     6. Wire the height map into the particle system
+     7. Initialize camera, projection, and input toggles
+     8. Enter main loop:
+          - Poll events (quit, toggle controls, regenerate/save height map)
+          - Update camera (mouse + keyboard) if enabled
+          - Update particle system if rain is enabled
+          - Print FPS/particle stats if toggled
+          - Compute current flightFrame for raindrop animation
+          - Clear buffers, then render:
+              • Skybox
+              • 3D scene (if loaded)
+              • Rain particles (with blending)
+          - Swap display buffers
+     9. On exit: clean up skybox, scene, and Pygame
+   """
 def main():
-    # 1) Init window + GL context
     init_context(800, 600, "Deszcz Point-Sprite z Kolizjami")
 
-    # 2) Load rain resources
     rain_shader = create_shader()
     atlas_tex = load_atlas("atlas40.png")
     psys = ParticleSystemWithHeightMap()  # Używamy nowego systemu
     rain_renderer = Renderer(rain_shader, psys, atlas_tex)
     skybox = SkyboxRenderer("sky/skymap.png", 0.4)
 
-    # 3) Load scene
     scene = GLTFScene()
     height_map = None
     try:
@@ -42,19 +69,16 @@ def main():
         scene_renderer.set_lighting(
             light_pos=vec3(2.0, 4.0, 3.0),  # niższe, bardziej rozproszone
             light_color=vec3(0.5, 0.5, 0.6),  # zimniejsze, lekko niebieskawe
-            ambient_color=vec3(0.2, 0.2, 0.25)  # ciemniejsze, pochmurne niebo
+            ambient_color=vec3(0.7, 0.7, 1)  # ciemniejsze, pochmurne niebo
         )
         scene_loaded = True
         print(f"Załadowano scenę: {len(scene.vao_list)} obiektów")
 
-        # 4) Generuj mapę wysokości z lepszymi ustawieniami
         model_matrix = rotate(mat4(1.0), radians(90), vec3(1, 0, 0))
 
-        # ZMNIEJSZ ROZDZIELCZOŚĆ dla szybszego generowania
-        resolution = 0.8  # Było 0.3, teraz 0.8 - mniej punktów
+        resolution = 0.8
         height_map = HeightMap(X_MIN, X_MAX, Y_MIN, Y_MAX, resolution=resolution)
 
-        # Sprawdź czy istnieje zapisana mapa wysokości
         heightmap_cache = f"heightmap_cache_{resolution}.npy"
         if os.path.exists(heightmap_cache):
             print("Wczytywanie mapy wysokości z cache...")
@@ -73,7 +97,6 @@ def main():
                 print("Używam płaskiej mapy wysokości...")
                 height_map = None
 
-        # Przekaż mapę wysokości do systemu cząstek
         psys.set_height_map(height_map)
 
         if height_map:
@@ -88,7 +111,7 @@ def main():
         print(f"Błąd ładowania sceny: {e}")
         scene_loaded = False
 
-    # 5) Setup camera control
+
     camera = Camera()
     camera_enabled = True
     rain_enabled = True
@@ -96,12 +119,10 @@ def main():
 
     pygame.mouse.set_visible(False)
     pygame.event.set_grab(True)
-    pygame.mouse.get_rel()  # flush motion
+    pygame.mouse.get_rel()
 
-    # 6) Projection
     proj = perspective(radians(45.0), 800 / 600, 0.1, 200.0)
 
-    # 7) Main loop
     clock = pygame.time.Clock()
     running = True
     frame_count = 0
@@ -152,7 +173,6 @@ def main():
                 elif e.key == K_l and height_map:
                     height_map.save_to_file("heightmap_manual.npy")
 
-        # Camera input
         if camera_enabled:
             dx, dy = pygame.mouse.get_rel()
             camera.process_mouse_delta(dx, dy)
@@ -161,11 +181,9 @@ def main():
         if camera_enabled:
             camera.process_keyboard(keys, dt)
 
-        # Update systems
         if rain_enabled:
             psys.update(dt)
 
-        # Pokaż statystyki co sekundę
         if show_stats and stats_timer >= 1.0:
             stats = psys.get_stats()
             print(
@@ -184,13 +202,11 @@ def main():
 
         skybox.render(proj, view)
 
-        # Render scene
         if scene_loaded:
             model_matrix = rotate(mat4(1.0), radians(90), vec3(1, 0, 0))
             scene_renderer.set_model_matrix(model_matrix)
             scene_renderer.render(proj, view, camera.position)
 
-        # Render rain
         if rain_enabled:
             glEnable(GL_BLEND)
             glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
@@ -199,7 +215,6 @@ def main():
 
         pygame.display.flip()
 
-    # Cleanup
     skybox.cleanup()
     if scene_loaded:
         scene.cleanup()

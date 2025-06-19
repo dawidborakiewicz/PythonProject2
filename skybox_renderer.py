@@ -1,6 +1,6 @@
 from OpenGL.GL import *
 from OpenGL.GL.shaders import compileProgram, compileShader
-from glm import mat4, value_ptr
+from pyglm.glm import (mat4, value_ptr)
 import pygame
 
 SKYBOX_VERT_SHADER = """
@@ -133,12 +133,10 @@ class SkyboxRenderer:
         glBindTexture(GL_TEXTURE_CUBE_MAP, texID)
 
         for i, rect in enumerate(face_rects):
-            # Sprawdzamy czy rect mieści się w atlasie
             if (rect.x + rect.width <= atlas_width and
                     rect.y + rect.height <= atlas_height):
                 face_surface = atlas.subsurface(rect)
 
-                # Specjalne transformacje dla ścian które były źle odwrócone
                 if i == 0:  # +X (right)
                     face_surface = pygame.transform.rotate(face_surface, 90)
                 elif i == 1:  # -X (left)
@@ -148,7 +146,6 @@ class SkyboxRenderer:
                 elif i == 5: face_surface = pygame.transform.rotate(face_surface, 180)
 
             else:
-                # Jeśli rect wykracza poza atlas, tworzymy pustą powierzchnię
                 face_surface = pygame.Surface((face_size, face_size), pygame.SRCALPHA)
                 face_surface.fill((128, 128, 255, 255))  # Niebieski placeholder
 
@@ -169,7 +166,6 @@ class SkyboxRenderer:
         glDepthFunc(GL_LEQUAL)
         glUseProgram(self.shader)
 
-        # Usuwamy translację z view_matrix (żeby skybox nie przemieszczał się z kamerą)
         view_no_translation = mat4(view_matrix)
         view_no_translation[3][0] = 0.0
         view_no_translation[3][1] = 0.0
@@ -192,7 +188,7 @@ class SkyboxRenderer:
 
         glBindVertexArray(0)
         glUseProgram(0)
-        glDepthFunc(GL_LESS)  # Przywracamy normalne testowanie głębokości
+        glDepthFunc(GL_LESS)
 
     def cleanup(self):
         glDeleteVertexArrays(1, [self.vao])

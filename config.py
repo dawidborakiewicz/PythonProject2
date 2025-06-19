@@ -1,18 +1,15 @@
-# PARAMETRY SYSTEMU CZĄSTEK i ATLASU
-NUM_PARTICLES   = 10000
-X_MIN, X_MAX    = -20.0, 20.0
-Y_MIN, Y_MAX    = -20.0, 20.0
-Z_SPAWN, Z_HEIGHT = 20.0, 40.0
-Z_GROUND        = 1.0
-RAIN_SPEED      = 20.0
+# Configuration constants for particle counts, spawn bounds, timing, and texture atlas layout.
+NUM_PARTICLES   = 50000          # Total number of raindrop particles
+X_MIN, X_MAX    = -20.0, 20.0    # Horizontal spawn area in X
+Y_MIN, Y_MAX    = -20.0, 20.0    # Horizontal spawn area in Y
+Z_SPAWN, Z_HEIGHT = 20.0, 40.0   # Vertical spawn region base and height
+Z_GROUND        = 1.0            # Default ground plane height if no terrain map
+RAIN_SPEED      = 20.0           # Downward velocity of raindrops
 
-# atlas 4×4 → każda komórka atlasu to 1/4 szerokości i 1/4 wysokości
-ATLAS_ROWS      = 4
-ATLAS_COLS      = 4
+ATLAS_ROWS      = 4              # Rows in sprite atlas
+ATLAS_COLS      = 4              # Columns in sprite atlas
 
-# ANIMACJA "SPLAT"
-SPLAT_TIME      = 0.2
-HALF_SPLAT      = SPLAT_TIME / 4.0
+SPLAT_TIME      = 0.2            # Total splash duration
+HALF_SPLAT      = SPLAT_TIME / 4.0  # Time until transition to final frame
 
-# klatki lotu (0–1)
-FLIGHT_FRAME_T  = 0.1
+FLIGHT_FRAME_T  = 0.1            # Time per frame for falling animation toggle :contentReference[oaicite:1]{index=1}

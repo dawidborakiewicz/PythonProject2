@@ -5,7 +5,10 @@ from PIL import Image
 from pygltflib import GLTF2
 from OpenGL.GL import *
 
-
+"""
+Loads objects and textures from a glTF file and converts them into a format ready for rendering.
+Stores raw mesh data (positions, normals, UVs, indices) as well as generated textures.
+"""
 class GLTFScene:
     def __init__(self):
         self.meshes = []
@@ -13,26 +16,28 @@ class GLTFScene:
         self.vao_list = []
 
     def load(self, path):
-        """Ładuje scenę glTF do GPU używając nowoczesnego OpenGL"""
+
         base = os.path.dirname(path) or '.'
         gltf = GLTF2().load(path)
 
-        # Wczytaj dane binarne
         with open(os.path.join(base, gltf.buffers[0].uri), 'rb') as f:
             blob = f.read()
 
-        # Wczytaj tekstury
         self._load_textures(gltf, base)
 
-        # Przetwórz meshe
         for mesh in gltf.meshes:
             for prim in mesh.primitives:
                 mesh_data = self._process_primitive(gltf, blob, prim)
                 if mesh_data:
                     self.meshes.append(mesh_data)
 
+    """
+    For each texture:
+     - load the image file via PIL,
+     - create an OpenGL texture, set wrap and filter parameters,
+     - upload the image data and generate mipmaps.
+    """
     def _load_textures(self, gltf, base_path):
-        """Ładuje tekstury do GPU"""
         for i, img in enumerate(gltf.images):
             img_path = os.path.join(base_path, img.uri)
             try:
@@ -40,13 +45,11 @@ class GLTFScene:
                 tex = glGenTextures(1)
                 glBindTexture(GL_TEXTURE_2D, tex)
 
-                # Parametry tekstury
                 glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR)
                 glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR)
                 glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT)
                 glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT)
 
-                # Wgraj dane tekstury
                 data = im.transpose(Image.FLIP_TOP_BOTTOM).tobytes()
                 glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, im.width, im.height,
                              0, GL_RGBA, GL_UNSIGNED_BYTE, data)
@@ -59,7 +62,6 @@ class GLTFScene:
         glBindTexture(GL_TEXTURE_2D, 0)
 
     def _extract_accessor(self, gltf, blob, acc_idx):
-        """Wypakowuje dane z accessora glTF"""
         acc = gltf.accessors[acc_idx]
         bv = gltf.bufferViews[acc.bufferView]
 
@@ -73,28 +75,26 @@ class GLTFScene:
         arr = np.frombuffer(blob[start:start + count], dtype=type_dtypes[acc.componentType])
         return arr.reshape((acc.count, type_components[acc.type]))
 
+    """
+    Extract accessors (POSITION, NORMAL, TEXCOORD_0, INDICES)
+    and build a mesh_data dictionary for a single mesh.
+    """
     def _process_primitive(self, gltf, blob, prim):
-        """Przetwarza pojedynczy prymityw glTF"""
         try:
-            # Pozycje (wymagane)
             pos = self._extract_accessor(gltf, blob, prim.attributes.POSITION).astype(np.float32)
 
-            # Normale (opcjonalne)
             norm = None
             if hasattr(prim.attributes, 'NORMAL') and prim.attributes.NORMAL is not None:
                 norm = self._extract_accessor(gltf, blob, prim.attributes.NORMAL).astype(np.float32)
 
-            # Współrzędne UV (opcjonalne)
             uv = None
             if hasattr(prim.attributes, 'TEXCOORD_0') and prim.attributes.TEXCOORD_0 is not None:
                 uv = self._extract_accessor(gltf, blob, prim.attributes.TEXCOORD_0).astype(np.float32)
 
-            # Indeksy
             indices = None
             if prim.indices is not None:
                 indices = self._extract_accessor(gltf, blob, prim.indices).flatten().astype(np.uint32)
 
-            # Materiał
             tex_id = None
             base_color = (1.0, 1.0, 1.0, 1.0)
 
@@ -124,14 +124,16 @@ class GLTFScene:
             print(f"Błąd przetwarzania prymitywu: {e}")
             return None
 
+    """
+    Generate a VAO along with its VBOs and IBO from the provided mesh_data,
+    and return the handles/info to the renderer.
+    """
     def create_vao(self, mesh_data):
-        """Tworzy VAO dla danych mesha"""
         vao = glGenVertexArrays(1)
         glBindVertexArray(vao)
 
         vbos = []
 
-        # Pozycje
         pos_vbo = glGenBuffers(1)
         glBindBuffer(GL_ARRAY_BUFFER, pos_vbo)
         glBufferData(GL_ARRAY_BUFFER, mesh_data['positions'].nbytes,
@@ -140,7 +142,6 @@ class GLTFScene:
         glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, None)
         vbos.append(pos_vbo)
 
-        # Normale (jeśli są)
         if mesh_data['normals'] is not None:
             norm_vbo = glGenBuffers(1)
             glBindBuffer(GL_ARRAY_BUFFER, norm_vbo)
@@ -150,7 +151,6 @@ class GLTFScene:
             glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 0, None)
             vbos.append(norm_vbo)
 
-        # UV (jeśli są)
         if mesh_data['uvs'] is not None:
             uv_vbo = glGenBuffers(1)
             glBindBuffer(GL_ARRAY_BUFFER, uv_vbo)
@@ -160,7 +160,6 @@ class GLTFScene:
             glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, 0, None)
             vbos.append(uv_vbo)
 
-        # Indeksy
         ibo = None
         if mesh_data['indices'] is not None:
             ibo = glGenBuffers(1)
@@ -182,16 +181,18 @@ class GLTFScene:
             'base_color': mesh_data['base_color'],
             'has_indices': mesh_data['indices'] is not None
         }
-
+    """
+    Create VAOs for all loaded meshes and store them in vao_list.
+    """
     def prepare_for_rendering(self):
-        """Przygotowuje wszystkie meshe do renderowania"""
         self.vao_list = []
         for mesh_data in self.meshes:
             vao_data = self.create_vao(mesh_data)
             self.vao_list.append(vao_data)
-
+    """
+    Delete textures, VAOs, and buffers when shutting down the application.
+    """
     def cleanup(self):
-        """Czyści zasoby GPU"""
         for tex in self.textures.values():
             glDeleteTextures(1, [tex])
 
